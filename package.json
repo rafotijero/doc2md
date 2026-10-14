@@ -1,0 +1,14 @@
+{
+  "name": "doc2md",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Convierte PDF y DOCX a Markdown: frontend y Worker en Cloudflare, backend en Hugging Face Spaces.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.35.0"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "doc2md",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    { "pattern": "doc2md.rafotijero.dev", "custom_domain": true }
+  ],
+  "observability": { "enabled": true },
+  "vars": {
+    // URL del Space de Hugging Face: https://<usuario>-<space>.hf.space
+    "BACKEND_URL": "https://rafotijero-doc2md.hf.space",
+    // Site key pública de Turnstile (la secret key va como secreto).
+    "TURNSTILE_SITE_KEY": "REEMPLAZAR_CON_SITE_KEY",
+    // Límites de la demo pública. Deben coincidir con MAX_FILE_MB y
+    // MAX_OCR_PAGES del backend, que también los aplica.
+    "MAX_FILE_MB": "10",
+    "MAX_OCR_PAGES": "3"
+  }
+  // Secretos (npx wrangler secret put <NOMBRE>): API_KEY, TURNSTILE_SECRET, OWNER_KEY
+}

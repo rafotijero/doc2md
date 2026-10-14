@@ -1,0 +1,20 @@
+# Node / Wrangler
+node_modules/
+.wrangler/
+.dev.vars
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Datos locales de prueba
+tessdata/
+*.pdf
+*.docx
+
+# Editores / SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
