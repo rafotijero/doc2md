@@ -1,4 +1,4 @@
-# Backend de doc2md para Hugging Face Spaces (SDK Docker).
+# Backend de doc2md para Google Cloud Run.
 FROM python:3.13-slim
 
 # Tesseract con español y detección de orientación (OSD).
@@ -7,7 +7,6 @@ RUN apt-get update \
         tesseract-ocr tesseract-ocr-spa tesseract-ocr-osd \
     && rm -rf /var/lib/apt/lists/*
 
-# Spaces ejecuta el contenedor con el usuario 1000.
 RUN useradd -m -u 1000 user
 USER user
 ENV PATH="/home/user/.local/bin:$PATH" \
@@ -18,5 +17,7 @@ COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 COPY --chown=user . .
 
-EXPOSE 7860
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+# Cloud Run indica el puerto en la variable PORT (8080 por defecto).
+ENV PORT=8080
+EXPOSE 8080
+CMD exec uvicorn app:app --host 0.0.0.0 --port "$PORT"

@@ -6,8 +6,9 @@ Variables de entorno:
                      X-API-Key con ese valor (así nadie se salta el Worker).
     MAX_FILE_MB      Tamaño máximo del archivo en la demo pública (def. 10).
     MAX_OCR_PAGES    Páginas escaneadas que se reconocen con OCR en la demo
-                     pública (def. 5); el resto se omite.
-    MAX_CONCURRENT   Conversiones simultáneas (def. 2); el OCR consume mucha RAM.
+                     pública (def. 3); el resto se omite.
+    MAX_CONCURRENT   Conversiones simultáneas (def. 1); el OCR consume mucha
+                     CPU y RAM, y una a la vez acota también el costo.
 
 El Worker añade "X-Unlimited: 1" cuando la petición viene del propietario;
 solo se respeta si además llega la API_KEY correcta.
@@ -29,7 +30,7 @@ from doc2md.word import docx_to_markdown
 API_KEY = os.environ.get("API_KEY", "")
 MAX_FILE_MB = float(os.environ.get("MAX_FILE_MB", "10"))
 MAX_OCR_PAGES = int(os.environ.get("MAX_OCR_PAGES", "3"))
-_slots = threading.BoundedSemaphore(int(os.environ.get("MAX_CONCURRENT", "2")))
+_slots = threading.BoundedSemaphore(int(os.environ.get("MAX_CONCURRENT", "1")))
 _QUEUE_TIMEOUT = 120  # segundos esperando turno antes de responder 503
 
 app = FastAPI(title="doc2md", docs_url=None, redoc_url=None)

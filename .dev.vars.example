@@ -1,5 +1,5 @@
 # Copia este archivo como .dev.vars para `npm run dev` (no se sube a git).
-BACKEND_URL=http://localhost:7860
+BACKEND_URL=http://localhost:8080
 API_KEY=devkey
 OWNER_KEY=owner-dev
 # Claves de prueba de Turnstile que siempre aprueban:

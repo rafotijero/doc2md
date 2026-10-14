@@ -116,14 +116,14 @@ async function loadConfig() {
   } catch {
     state.config = { maxFileMb: 10, maxOcrPages: 3, owner: false };
   }
-  const { maxFileMb, maxOcrPages, owner } = state.config;
+  const { maxFileMb, maxOcrPages, dailyOcrLimit, owner } = state.config;
   if (owner) {
     $("limits-hint").textContent = "PDF o DOCX · sin límites (propietario)";
     $("ocr-hint").textContent = "Más lento: puede tardar un minuto por página.";
     $("owner-status").textContent = "Clave válida: sin límites ni verificación.";
   } else {
     $("limits-hint").textContent = `PDF o DOCX · hasta ${maxFileMb} MB`;
-    $("ocr-hint").textContent = `Más lento. En la demo se reconocen hasta ${maxOcrPages} páginas escaneadas.`;
+    $("ocr-hint").textContent = `Más lento. En la demo: hasta ${maxOcrPages} páginas escaneadas y ${dailyOcrLimit} conversiones con OCR al día.`;
     $("owner-status").textContent = storageGet(OWNER_STORAGE) ? "La clave guardada no es válida." : "";
   }
   loadTurnstile();

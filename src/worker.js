@@ -2,15 +2,18 @@
  * Worker de doc2md.
  *
  * - Sirve el frontend estático (carpeta public/) mediante el binding ASSETS.
- * - /api/* hace de puerta de entrada al backend (Hugging Face Spaces):
- *   verifica Turnstile, aplica el límite de tamaño de la demo pública y añade
- *   la API_KEY que el backend exige, para que nadie lo use saltándose esto.
+ * - /api/* hace de puerta de entrada al backend (Google Cloud Run):
+ *   verifica Turnstile, aplica los límites de la demo pública y añade la
+ *   API_KEY que el backend exige, para que nadie lo use saltándose esto.
+ * - Cupos diarios (KV "LIMITS"): DAILY_LIMIT conversiones y DAILY_OCR_LIMIT
+ *   conversiones con OCR al día para el público. Mantienen el uso de Cloud
+ *   Run dentro de su capa gratuita.
  * - Con la cabecera X-Owner-Key = OWNER_KEY (secreto) no hay Turnstile ni
  *   límites: es el acceso del propietario.
  *
  * Variables (wrangler.jsonc): BACKEND_URL, TURNSTILE_SITE_KEY, MAX_FILE_MB,
- * MAX_OCR_PAGES. Secretos (wrangler secret put): API_KEY, TURNSTILE_SECRET,
- * OWNER_KEY.
+ * MAX_OCR_PAGES, DAILY_LIMIT, DAILY_OCR_LIMIT. Secretos (wrangler secret
+ * put): API_KEY, TURNSTILE_SECRET, OWNER_KEY.
  */
 
 const json = (data, status = 200) =>
@@ -48,11 +51,26 @@ async function verifyTurnstile(token, request, env) {
   return outcome.success === true;
 }
 
+// Cupos diarios en KV. KV es eventualmente consistente, así que con mucho
+// tráfico simultáneo el cupo podría excederse por poco; aquí basta.
+const quotaKey = (kind) => `${kind}:${new Date().toISOString().slice(0, 10)}`;
+
+async function quotaUsed(env, kind) {
+  return Number(await env.LIMITS.get(quotaKey(kind))) || 0;
+}
+
+async function quotaAdd(env, kind) {
+  const used = await quotaUsed(env, kind);
+  // Expira a los 2 días: los contadores viejos se borran solos.
+  await env.LIMITS.put(quotaKey(kind), String(used + 1), { expirationTtl: 172800 });
+}
+
 async function handleConfig(request, env) {
   return json({
     turnstileSiteKey: env.TURNSTILE_SITE_KEY,
     maxFileMb: Number(env.MAX_FILE_MB),
     maxOcrPages: Number(env.MAX_OCR_PAGES),
+    dailyOcrLimit: Number(env.DAILY_OCR_LIMIT),
     owner: await isOwner(request, env),
   });
 }
@@ -60,13 +78,13 @@ async function handleConfig(request, env) {
 async function handleHealth(env) {
   try {
     const res = await fetch(`${env.BACKEND_URL}/health`, {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) return json({ ready: false });
     const data = await res.json();
     return json({ ready: data.status === "ok", ocr: data.ocr === true });
   } catch {
-    // Space dormido o arrancando: la propia petición lo despierta.
+    // Servicio apagado o arrancando: la propia petición lo despierta.
     return json({ ready: false });
   }
 }
@@ -97,9 +115,23 @@ async function handleConvert(request, env) {
     if (!ok) return error("No se pudo verificar que eres humano. Recarga la página.", 403);
   }
 
+  const wantsOcr = form.get("ocr") === "true" && file.name.toLowerCase().endsWith(".pdf");
+  if (!owner) {
+    if ((await quotaUsed(env, "convert")) >= Number(env.DAILY_LIMIT)) {
+      return error("Se alcanzó el límite de conversiones de hoy. Vuelve mañana.", 429);
+    }
+    if (wantsOcr && (await quotaUsed(env, "ocr")) >= Number(env.DAILY_OCR_LIMIT)) {
+      return error(
+        "Se alcanzó el límite de conversiones con OCR de hoy. Desmarca el OCR o vuelve mañana.",
+        429,
+      );
+    }
+    await quotaAdd(env, "convert");
+  }
+
   const upstream = new FormData();
   upstream.append("file", file, file.name);
-  upstream.append("ocr", form.get("ocr") === "true" ? "true" : "false");
+  upstream.append("ocr", wantsOcr ? "true" : "false");
   upstream.append("merge_tables", form.get("merge_tables") === "true" ? "true" : "false");
 
   let res;
@@ -115,13 +147,18 @@ async function handleConvert(request, env) {
 
   const type = res.headers.get("content-type") || "";
   if (!type.includes("application/json")) {
-    // Hugging Face responde HTML mientras el Space arranca.
-    return error("El servidor se está despertando. Intenta de nuevo en un minuto.", 503);
+    return error("El servidor no está disponible. Intenta de nuevo en un minuto.", 503);
   }
-  return new Response(res.body, {
-    status: res.status,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
+  if (owner || !wantsOcr || !res.ok) {
+    return new Response(res.body, {
+      status: res.status,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+  // Solo se descuenta del cupo de OCR si de verdad se reconoció alguna página.
+  const data = await res.json();
+  if (data.ocr_pages > 0) await quotaAdd(env, "ocr");
+  return json(data);
 }
 
 export default {
